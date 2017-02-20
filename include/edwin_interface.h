@@ -14,7 +14,6 @@
 
 #include "st_arm.h"
 
-#define N_JOINTS 5
 
 class EdwinInterface: public hardware_interface::RobotHW{
 	private:
@@ -38,9 +37,9 @@ class EdwinInterface: public hardware_interface::RobotHW{
 	public:
 		EdwinInterface(ros::NodeHandle nh);
 		ros::Time get_time();
-		void joint_cb(const sensor_msgs::JointStateConstPtr& msg);
-		virtual void read(const ros::Time& time, const ros::Duration& period);
-		virtual void write(const ros::Time& time, const ros::Duration& period);
+		void arm_cmd_cb(const std_msgs::StringConstPtr& msg);
+		virtual void read(const ros::Time& time);
+		virtual void write(const ros::Time& time);
 };
 
 enum {WRIST,HAND,ELBOW,SHOULDER,WAIST};

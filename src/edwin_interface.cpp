@@ -6,9 +6,15 @@
 #include "utils.h"
 #include "edwin_interface.h"
 
-const std::string joints[] = {"wrist","hand","elbow","shoulder","waist"};
+const std::string joints[] = {"waist","shoulder","elbow","hand","wrist"};
 
-EdwinInterface::EdwinInterface(ros::NodeHandle nh):nh(nh){
+EdwinInterface::EdwinInterface(ros::NodeHandle nh):st("/dev/ttyUSB0"), nh(nh){
+	// initialize arm
+	st.initialize();
+	st.start();
+	st.set_speed(10000);
+	st.home();
+
 	char buf[64] = {};
 	for(int i=0; i<N_JOINTS; ++i){
 		// connect and register the joint state interface
@@ -22,55 +28,117 @@ EdwinInterface::EdwinInterface(ros::NodeHandle nh):nh(nh){
 	}
 	registerInterface(&jnt_pos_interface);
 
-	pub = nh.advertise<std_msgs::String>("arm_cmd", 10, false);
-	sub = nh.subscribe("joint_states", 10, &EdwinInterface::joint_cb, this);
+	pub = nh.advertise<sensor_msgs::JointState>("joint_states", 10, false);
+	sub = nh.subscribe("arm_cmd", 10, &EdwinInterface::arm_cmd_cb, this);
+
+	//publish joint states
+	joint_state_msg.header.frame_id = "base_link";
+
+	// urdf joint names
+	const char* joints[] = {"joint_1","joint_2","joint_3","joint_4","joint_5"};
+	for(int i=0; i<N_JOINTS; ++i){
+		joint_state_msg.name.push_back(joints[i]);
+		joint_state_msg.position.push_back(0);
+		joint_state_msg.velocity.push_back(0);
+		joint_state_msg.effort.push_back(0);
+	}
 }
 
 ros::Time EdwinInterface::get_time(){
 	return ros::Time::now();
 }
 
-void EdwinInterface::joint_cb(const sensor_msgs::JointStateConstPtr& msg){
-	joint_state_msg = *msg;
-	for(int i=0; i<N_JOINTS; ++i){
-		pos[i] = joint_state_msg.position[i];
+void EdwinInterface::arm_cmd_cb(const std_msgs::StringConstPtr& msg){
+	st.write(msg->data);
+
+	// TODO : implement backwards-compatible arm-cmd
+	//joint_state_msg = *msg;
+	//for(int i=0; i<N_JOINTS; ++i){
+	//	pos[i] = joint_state_msg.position[i];
+	//}
+}
+
+void cvtJ(std::vector<double>& j){
+	// convert to degrees
+	j[0] *= 90./B_RATIO;
+	j[1] *= 90./S_RATIO;
+	j[2] *= 90./E_RATIO;
+	j[3] *= 90./W_RATIO;
+	j[4] *= 90./T_RATIO;
+	j[4] -= j[3];
+
+	for(std::vector<double>::iterator it = j.begin(); it!=j.end();++it){
+		double& l = *it;
+		l = d2r(l);
 	}
 }
-void EdwinInterface::read(const ros::Time& time, const ros::Duration& period){
-	// info from st-r17, i.e. current joint states
-	//for(int i=0; i<N_JOINTS; ++i){
-	//	cmd_msg.data = "get_joint_states"; 
-	//	pub.publish(cmd_msg);
-	//}
-	std::vector<float> loc = st.where();
-	loc[1] /= 2;
-	loc[4] *= 3;
-	loc[4] -= loc[3];
 
-	loc[2] = -loc[2]; // flip direction
-	loc[4] = -loc[4];
+void cvtJ_i(std::vector<double>& j){
+	//invert the conversion
+	for(std::vector<double>::iterator it = j.begin(); it!=j.end();++it){
+		double& l = *it;
+		l = r2d(l);
+	}
+	j[4] += j[3];
 
-	for(float& l : loc){ // possibly illegal?
+	j[0] /= 90./B_RATIO;
+	j[1] /= 90./S_RATIO;
+	j[2] /= 90./E_RATIO;
+	j[3] /= 90./W_RATIO;
+	j[4] /= 90./T_RATIO;
+}
+
+void EdwinInterface::read(const ros::Time& time){
+	//alias with reference
+	std::vector<double>& loc = joint_state_msg.position;
+	//std::vector<float> loc = st.where();
+	st.where(loc);
+
+	if(loc.size() != 5){
+		std::cerr << "WARNING :: INVALID LOCATION READ !!! " << std::endl;
+		std::cerr << loc.size() << std::endl;
+		return;
+	}
+
+	//reformat based on scale and direction
+	cvtJ(loc);
+
+	// convert to radians
+	for(std::vector<double>::iterator it=loc.begin(); it!=loc.end(); ++it){
+		double& l = *it;
 		l = l/100*M_PI/180;
 	}
+
+	// fill data
 	for(int i=0; i<N_JOINTS;++i){
 		pos[i] = loc[i];
 	}
+
+	//publish joint states
+	joint_state_msg.header.stamp = ros::Time::now();
+	pub.publish(joint_state_msg);
 }
 
-void EdwinInterface::write(const ros::Time& time, const ros::Duration& period){
+void EdwinInterface::write(const ros::Time& time){
+	//st.move ... joints
 	// info to st-r17, i.e. desired joint states
+	std::vector<double> cmd_pos(N_JOINTS);
+	for(int i=0; i<N_JOINTS; ++i){
+		cmd_pos[i] = cmd[i];
+	}
+
+	cvtJ_i(cmd_pos); // invert conversion
+
 	for(int i=0; i<N_JOINTS; ++i){
 		// DEBUGGING:
 		// std::cout << (i==0?"":", ") << cmd[i];
+		
 		float dp = cmd[i] - pos[i]; // target-position
-		dp = dp>0?dp:-dp;
+		dp = dp>0?dp:-dp; // abs
+
 		if(dp > d2r(1)){ // more than 1 degrees different
-			std::stringstream ss;
-			int k = round(r2d(posr(cmd[i])*10));
-			ss << "data: rotate_" << joints[i] << ":: " << k;
-			cmd_msg.data = ss.str();
-			pub.publish(cmd_msg);	
+			// TODO : apply scaling factors?
+			st.move(joints[i], cmd_pos[i]);
 		}
 	}
 };
@@ -90,18 +158,11 @@ int main(int argc, char* argv[]){
 	ros::Rate r = ros::Rate(10.0); // 10 Hz
 	int cnt = 0;
 	while(ros::ok()){
-
 		ros::Time now = edwin.get_time();
 		ros::Duration period = ros::Duration(now-then);
-
-		if(cnt % 10 == 0) // read every 20Hz/10 = 1 Hz
-			edwin.read(now,period);
-
+		edwin.read(now);
 		cm.update(now, period);
-
-		if (cnt % 30 == 0)
-			edwin.write(now,period);
-
+		edwin.write(now);
 		++cnt;
 		r.sleep();
 	}

@@ -1,4 +1,5 @@
 #include "utils.h"
+#include <sstream>
 
 float lerp(float a, float b, float w){
 	return a*w + b*(1-w);
@@ -19,3 +20,16 @@ float posr(float x){
         x += TWO_PI;
     return x;
 }
+
+std::vector<std::string> split(const std::string& s, char delim){
+	std::stringstream ss(s);
+	std::vector<std::string> l;
+	std::string elem;
+	while(std::getline(ss, elem, delim)){
+		if(!elem.empty()){
+			l.push_back(elem);
+		}
+	}
+	return l;
+}
+

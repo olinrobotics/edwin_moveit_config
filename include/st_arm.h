@@ -5,25 +5,40 @@
 #include <vector>
 #include <string>
 #include <sstream>
+#include "utils.h"
+
+#define N_JOINTS 5
+
+#define B_RATIO 9818
+#define S_RATIO 18000
+#define E_RATIO 9000
+#define W_RATIO 3000
+#define T_RATIO 3000
 
 using namespace LibSerial;
+enum Mode {MODE_CARTESIAN, MODE_JOINT};
 
 class STArm{
 	private:
 		SerialStream ser;
-		void write(const std::string str);
-		//
 	public:
 		STArm(const std::string port="/dev/ttyUSB0"); //default port
+		~STArm();
 
-		void home();
+		std::string write(const std::string str);
 		void initialize();
-		void purge();
-		void roboforth();
-		void calibrate();
 		void start();
-		std::vector<float> where();
+
+		//one-liner commands
+		void home();
+		void purge();
+		void calibrate();
 		void joint();
+
+		void move(const std::string& j, int val, bool rel=false);
+
+		std::vector<double> where();
+		void where(std::vector<double>& v);
 
 		void create_route();
 		std::string block_on_result(); // necessary?
@@ -33,7 +48,7 @@ class STArm{
 
 		void set(std::string cmd);
 		void set_speed(int speed);
-		void set_cartesian(bool);
+		void set_mode(Mode); //joint or cartesian
 		void set_decimal();
 		void set_continuous();
 		void set_segmented();
