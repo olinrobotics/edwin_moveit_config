@@ -22,7 +22,7 @@ void STArm::initialize(){
 	write("ROBOFORTH");
 	set_mode(MODE_JOINT);
 	start();
-	calibrate();
+	//calibrate();
 	home();
 	// perform initial calibration
 }
@@ -58,6 +58,16 @@ void STArm::move(const std::string& j, int val, bool rel){
 
 	// format string
 	ss << "TELL " << s << ' ' << val << ' ' << (rel?"MOVE":"MOVETO");
+	write(ss.str());
+}
+
+void STArm::move(const std::vector<double>& v){
+	std::stringstream ss;
+	for(std::vector<double>::const_iterator it=v.begin(); it!=v.end(); ++it){
+		int v = *it;
+		ss << v << ' ';
+	}
+	ss << "JMA";
 	write(ss.str());
 }
 

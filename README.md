@@ -6,6 +6,6 @@ This project depends on [LibSerial](https://github.com/crayzeewulf/libserial). N
 ### Running
 
 ```bash
-ROS_NAMESPACE=edwin rosrun edwin arm_node.py
+roslaunch edwin_moveit_config hardware.launch
 roslaunch edwin_moveit_config real.launch
 ```

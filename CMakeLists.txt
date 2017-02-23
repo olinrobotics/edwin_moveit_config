@@ -3,6 +3,7 @@ project(edwin_moveit_config)
 
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake/modules/")
 find_package(LibSerial REQUIRED)
+find_package(Threads)
 
 find_package(catkin REQUIRED
 	roscpp
@@ -19,7 +20,7 @@ find_package(catkin REQUIRED
 
 catkin_package()
 
-add_executable(edwin_hardware_node src/edwin_interface.cpp src/st_arm.cpp src/utils.cpp)
+add_executable(edwin_hardware_node src/edwin_interface.cpp src/st_arm.cpp src/utils.cpp src/Mutex.cpp)
 
 include_directories(
 	include/
@@ -31,7 +32,7 @@ include_directories(
 target_link_libraries(edwin_hardware_node
 	${catkin_LIBRARIES}
 	${LIBSERIAL_LIBRARY}
-	-lpthread
+	${CMAKE_THREAD_LIBS_INIT}
 	)
 
 install(DIRECTORY launch DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}

@@ -36,6 +36,7 @@ class STArm{
 		void joint();
 
 		void move(const std::string& j, int val, bool rel=false);
+		void move(const std::vector<double>& v);
 
 		std::vector<double> where();
 		void where(std::vector<double>& v);

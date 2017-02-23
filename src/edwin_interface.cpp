@@ -5,10 +5,13 @@
 
 #include "utils.h"
 #include "edwin_interface.h"
+#include "Mutex.h"
 
 const std::string joints[] = {"waist","shoulder","elbow","hand","wrist"};
+Mutex mtx;
 
 EdwinInterface::EdwinInterface(ros::NodeHandle nh):st("/dev/ttyUSB0"), nh(nh){
+
 	// initialize arm
 	st.initialize();
 	st.start();
@@ -49,7 +52,13 @@ ros::Time EdwinInterface::get_time(){
 }
 
 void EdwinInterface::arm_cmd_cb(const std_msgs::StringConstPtr& msg){
+	std::cout << "MSG DATA ::" << msg->data << std::endl;
+
+	// ##### MUTEX #####
+	mtx.lock();
 	st.write(msg->data);
+	mtx.unlock();
+	// #################
 
 	// TODO : implement backwards-compatible arm-cmd
 	//joint_state_msg = *msg;
@@ -91,28 +100,28 @@ void cvtJ_i(std::vector<double>& j){
 void EdwinInterface::read(const ros::Time& time){
 	//alias with reference
 	std::vector<double>& loc = joint_state_msg.position;
-	//std::vector<float> loc = st.where();
+	
+	// ##### MUTEX #####
+	mtx.lock();	
 	st.where(loc);
+	mtx.unlock();
 
 	if(loc.size() != 5){
 		std::cerr << "WARNING :: INVALID LOCATION READ !!! " << std::endl;
 		std::cerr << loc.size() << std::endl;
 		return;
 	}
+	// #################
 
 	//reformat based on scale and direction
 	cvtJ(loc);
 
-	// convert to radians
-	for(std::vector<double>::iterator it=loc.begin(); it!=loc.end(); ++it){
-		double& l = *it;
-		l = l/100*M_PI/180;
-	}
-
 	// fill data
 	for(int i=0; i<N_JOINTS;++i){
 		pos[i] = loc[i];
+		//std::cout << pos[i] << ',';
 	}
+	//std::cout << std::endl;
 
 	//publish joint states
 	joint_state_msg.header.stamp = ros::Time::now();
@@ -129,18 +138,24 @@ void EdwinInterface::write(const ros::Time& time){
 
 	cvtJ_i(cmd_pos); // invert conversion
 
-	for(int i=0; i<N_JOINTS; ++i){
-		// DEBUGGING:
-		// std::cout << (i==0?"":", ") << cmd[i];
-		
-		float dp = cmd[i] - pos[i]; // target-position
-		dp = dp>0?dp:-dp; // abs
 
-		if(dp > d2r(1)){ // more than 1 degrees different
-			// TODO : apply scaling factors?
-			st.move(joints[i], cmd_pos[i]);
-		}
-	}
+	// ##### MUTEX #####
+	mtx.lock();
+	st.move(cmd_pos);
+	//for(int i=0; i<N_JOINTS; ++i){
+	//	// DEBUGGING:
+	//	// std::cout << (i==0?"":", ") << cmd[i];
+	//	
+	//	float dp = cmd[i] - pos[i]; // target-position
+	//	dp = dp>0?dp:-dp; // abs
+
+	//	if(dp > d2r(1)){ // more than 1 degrees different
+	//		// TODO : apply scaling factors?
+	//		st.move(joints[i], cmd_pos[i]);
+	//	}
+	//}
+	mtx.unlock();
+	// #################
 };
 
 
@@ -162,7 +177,7 @@ int main(int argc, char* argv[]){
 		ros::Duration period = ros::Duration(now-then);
 		edwin.read(now);
 		cm.update(now, period);
-		edwin.write(now);
+		//edwin.write(now);
 		++cnt;
 		r.sleep();
 	}
