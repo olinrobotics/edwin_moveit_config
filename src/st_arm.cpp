@@ -22,7 +22,7 @@ void STArm::initialize(){
 	write("ROBOFORTH");
 	set_mode(MODE_JOINT);
 	start();
-	//calibrate();
+	calibrate();
 	home();
 	// perform initial calibration
 }

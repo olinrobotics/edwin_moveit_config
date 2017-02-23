@@ -177,7 +177,7 @@ int main(int argc, char* argv[]){
 		ros::Duration period = ros::Duration(now-then);
 		edwin.read(now);
 		cm.update(now, period);
-		//edwin.write(now);
+		edwin.write(now);
 		++cnt;
 		r.sleep();
 	}
