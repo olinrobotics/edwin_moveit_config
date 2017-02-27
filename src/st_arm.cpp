@@ -62,6 +62,8 @@ void STArm::move(const std::string& j, int val, bool rel){
 }
 
 void STArm::move(const std::vector<double>& v){
+	// JMA command lists the joint in the opposite order of what's given by commands like WHERE.
+	// therefore it must be enumerated in reverse, for consistency.
 	std::stringstream ss;
 	for(std::vector<double>::const_reverse_iterator it=v.rbegin(); it!=v.rend(); ++it){
 		int v = *it;
