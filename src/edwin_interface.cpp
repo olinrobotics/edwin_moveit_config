@@ -18,27 +18,24 @@ EdwinInterface::EdwinInterface(ros::NodeHandle nh):st("/dev/ttyUSB0"), nh(nh){
 	st.set_speed(10000);
 	st.home();
 
-	char buf[64] = {};
 	for(int i=0; i<N_JOINTS; ++i){
 		// connect and register the joint state interface
-		std::sprintf(buf, "joint_%d", i+1);
-		hardware_interface::JointStateHandle state_handle(buf, &pos[i], &vel[i], &eff[i]);
+		hardware_interface::JointStateHandle state_handle(joints[i], &pos[i], &vel[i], &eff[i]);
 		jnt_state_interface.registerHandle(state_handle);
-
 		// connect and register the joint position interface
-		hardware_interface::JointHandle pos_handle(jnt_state_interface.getHandle(buf), &cmd[i]);
+		hardware_interface::JointHandle pos_handle(jnt_state_interface.getHandle(joints[i]), &cmd[i]);
 		jnt_pos_interface.registerHandle(pos_handle);
 	}
 	registerInterface(&jnt_pos_interface);
 
 	pub = nh.advertise<sensor_msgs::JointState>("joint_states", 10, false);
+
 	sub = nh.subscribe("arm_cmd", 10, &EdwinInterface::arm_cmd_cb, this);
 
 	//publish joint states
 	joint_state_msg.header.frame_id = "base_link";
 
 	// urdf joint names
-	const char* joints[] = {"joint_1","joint_2","joint_3","joint_4","joint_5"};
 	for(int i=0; i<N_JOINTS; ++i){
 		joint_state_msg.name.push_back(joints[i]);
 		joint_state_msg.position.push_back(0);
@@ -90,11 +87,11 @@ void cvtJ_i(std::vector<double>& j){
 	}
 	j[4] += j[3];
 
-	j[0] /= 90./B_RATIO;
-	j[1] /= 90./S_RATIO;
-	j[2] /= 90./E_RATIO;
-	j[3] /= 90./W_RATIO;
-	j[4] /= 90./T_RATIO;
+	j[0] = int(j[0] * B_RATIO / 90.);
+	j[1] = int(j[1] * S_RATIO / 90.);
+	j[2] = int(j[2] * E_RATIO / 90.);
+	j[3] = int(j[3] * W_RATIO / 90.);
+	j[4] = int(j[4] * T_RATIO / 90.);
 }
 
 void EdwinInterface::read(const ros::Time& time){
@@ -158,9 +155,19 @@ void EdwinInterface::write(const ros::Time& time){
 	// #################
 };
 
+template <typename T>
+std::ostream& operator<<(std::ostream& os, const std::vector<T>& v){
+	os << '[';
+	for(typename std::vector<T>::const_iterator it=v.begin();it!=v.end();++it){
+		os << (*it) << ',';
+	}
+	os << ']';
+}
 
 int main(int argc, char* argv[]){
 	ros::init(argc,argv,"edwin_hardware");
+	std::vector<double> j;
+
 	ros::NodeHandle nh;
 
 	EdwinInterface edwin(nh);

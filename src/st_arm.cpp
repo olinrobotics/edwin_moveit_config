@@ -63,7 +63,7 @@ void STArm::move(const std::string& j, int val, bool rel){
 
 void STArm::move(const std::vector<double>& v){
 	std::stringstream ss;
-	for(std::vector<double>::const_iterator it=v.begin(); it!=v.end(); ++it){
+	for(std::vector<double>::const_reverse_iterator it=v.rbegin(); it!=v.rend(); ++it){
 		int v = *it;
 		ss << v << ' ';
 	}

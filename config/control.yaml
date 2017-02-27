@@ -3,11 +3,11 @@ edwin:
         type: position_controllers/JointTrajectoryController
         action_ns: "follow_joint_trajectory"
         joints:
-            - joint_1
-            - joint_2
-            - joint_3
-            - joint_4
-            - joint_5
+            - waist
+            - shoulder
+            - elbow
+            - hand
+            - wrist
 
 controller_list:
   - name: "edwin/edwin_controller"
@@ -15,8 +15,8 @@ controller_list:
     type: FollowJointTrajectory 
     default: true
     joints:
-        - joint_1
-        - joint_2
-        - joint_3
-        - joint_4
-        - joint_5
+        - waist
+        - shoulder
+        - elbow
+        - hand
+        - wrist

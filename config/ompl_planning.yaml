@@ -65,5 +65,5 @@ arm_group:
     - TRRTkConfigDefault
     - PRMkConfigDefault
     - PRMstarkConfigDefault
-  projection_evaluator: joints(joint_1,joint_2)
+  projection_evaluator: joints(waist,shoulder)
   longest_valid_segment_fraction: 0.05
