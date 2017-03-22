@@ -1,7 +1,9 @@
 cmake_minimum_required(VERSION 2.8.3)
 project(edwin_moveit_config)
 
-set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake/modules/")
+set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/edwin_moveit_config/cmake/modules/")
+MESSAGE( STATUS "CMAKE_SOURCE_DIR:         " ${CMAKE_SOURCE_DIR} )
+
 find_package(LibSerial REQUIRED)
 find_package(Threads)
 

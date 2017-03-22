@@ -23,8 +23,9 @@
   <run_depend>joint_state_publisher</run_depend>
   <run_depend>robot_state_publisher</run_depend>
   <run_depend>xacro</run_depend>
-  <build_depend>edwin_description</build_depend>
-  <run_depend>edwin_description</run_depend>
+  <build_depend>ros_control</build_depend>
+  <run_depend>ros_control</run_depend>
+  <run_depend>moveit_fake_controller_manager</run_depend>
 
 
 </package>
