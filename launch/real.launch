@@ -6,6 +6,7 @@
 
 	<!-- By default, we are not in debug mode -->
 	<arg name="debug" default="false" />
+	<arg name="rviz" default="false" />
 
 	<!--<node name="edwin_hardware_node" pkg="edwin_moveit_config" type="edwin_hardware_node"
 		ns="edwin" output="screen">
@@ -32,7 +33,9 @@
   </node>-->
 
   <!-- Given the published joint states, publish tf for the robot links -->
-  <node name="robot_state_publisher" pkg="robot_state_publisher" type="robot_state_publisher" respawn="true" output="screen" />
+  <node name="robot_state_publisher" pkg="robot_state_publisher" type="robot_state_publisher" respawn="true" output="screen" >
+	  <remap from="joint_states" to="/edwin/joint_states"/> 
+  </node>
 
 
   <!-- controller -->
@@ -49,9 +52,11 @@
   </include>
 
   <!-- Run Rviz and load the default config to see the state of the move_group node -->
-  <!--<include file="$(find edwin_moveit_config)/launch/moveit_rviz.launch">
-	  <arg name="config" value="true"/>
-	  <arg name="debug" value="$(arg debug)"/>
-  </include>-->
+  <group if="$(arg rviz)">
+	  <include file="$(find edwin_moveit_config)/launch/moveit_rviz.launch">
+		  <arg name="config" value="true"/>
+		  <arg name="debug" value="$(arg debug)"/>
+	  </include>
+  </group>
 
 </launch>

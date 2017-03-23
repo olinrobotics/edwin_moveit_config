@@ -12,6 +12,17 @@
     <group name="arm_group">
         <chain base_link="base_link" tip_link="link_5" />
     </group>
+
+	<group_state name="home" group="arm_group">
+		<joint name="waist" value="0.0"/>
+		<joint name="shoulder" value="0.0"/>
+		<joint name="elbow" value="0.0"/>
+		<joint name="hand" value="0.0"/>
+		<joint name="wrist" value="0.0"/>
+	</group_state>
+
+	<!--<end_effector name="jaw" parent_link="link_5" group="arm_group"/>-->
+
     <!--VIRTUAL JOINT: Purpose: this element defines a virtual joint between a robot link and an external frame of reference (considered fixed with respect to the robot)-->
     <virtual_joint name="virtual_joint" type="planar" parent_frame="odom" child_link="base_link" />
     <!--DISABLE COLLISIONS: By default it is assumed that any link of the robot could potentially come into collision with any other link in the robot. This tag disables collision checking between a specified pair of links. -->
@@ -20,4 +31,5 @@
     <disable_collisions link1="link_2" link2="link_3" reason="Adjacent" />
     <disable_collisions link1="link_3" link2="link_4" reason="Adjacent" />
     <disable_collisions link1="link_4" link2="link_5" reason="Adjacent" />
+
 </robot>

@@ -10,7 +10,7 @@
 const std::string joints[] = {"waist","shoulder","elbow","hand","wrist"};
 Mutex mtx;
 
-EdwinInterface::EdwinInterface(ros::NodeHandle nh):st("/dev/ttyUSB0"), nh(nh){
+EdwinInterface::EdwinInterface(ros::NodeHandle nh, const std::string& dev):st(dev), nh(nh){
 
 	// initialize arm
 	st.initialize();
@@ -169,8 +169,14 @@ int main(int argc, char* argv[]){
 	std::vector<double> j;
 
 	ros::NodeHandle nh;
+	ros::NodeHandle nh_priv("~");
 
-	EdwinInterface edwin(nh);
+	std::string dev;
+	nh_priv.param("/dev", dev, std::string("/dev/ttyUSB0")); 
+	ROS_INFO("Get Param %s", ros::param::get("/dev", dev)?"SUCCEEDED":"FAILED");
+	ROS_INFO("initialized with device %s", dev.c_str());
+
+	EdwinInterface edwin(nh, dev);
 	controller_manager::ControllerManager cm(&edwin, nh);
 
 	ros::AsyncSpinner spinner(1);
