@@ -49,7 +49,10 @@
 #include <moveit_simple_grasps/grasp_data.h>
 #include <moveit_visual_tools/moveit_visual_tools.h>
 
-moveit_msgs::CollisionObject spawnObject(moveit::planning_interface::PlanningSceneInterface& p){
+#include <iostream>
+#include <memory>
+
+void spawnObject(moveit::planning_interface::PlanningSceneInterface& p){
 	moveit_msgs::PlanningScene planning_scene;
 	planning_scene.is_diff = true;
 	planning_scene.robot_state.is_diff = true;
@@ -75,43 +78,74 @@ moveit_msgs::CollisionObject spawnObject(moveit::planning_interface::PlanningSce
 	table.operation = table.ADD;
 	v.push_back(table);
 
-	moveit_msgs::CollisionObject object;
 
 	// add "OBJECT"
-	object.header.frame_id = "odom";
-	object.id = "object";
+	//moveit_msgs::CollisionObject object;
+	//object.header.frame_id = "odom";
+	//object.id = "object";
 
-	shape_msgs::SolidPrimitive primitive;
-	primitive.type = primitive.CYLINDER;
-	primitive.dimensions.push_back(0.2);
-	primitive.dimensions.push_back(0.04);
+	//shape_msgs::SolidPrimitive primitive;
+	//primitive.type = primitive.CYLINDER;
+	//primitive.dimensions.push_back(0.2);
+	//primitive.dimensions.push_back(0.04);
 
-	geometry_msgs::Pose pose;
-	pose.orientation.w = 1;
-	pose.position.x = 0.3; // 30 cm forwards from frame
-	pose.position.y = 0.0;
-	pose.position.z = primitive.dimensions[0]/2 + 0.0;
+	//geometry_msgs::Pose pose;
+	//pose.orientation.w = 1;
+	//pose.position.x = 0.3; // 30 cm forwards from frame
+	//pose.position.y = 0.0;
+	//pose.position.z = primitive.dimensions[0]/2 + 0.0;
 
-	object.primitives.push_back(primitive);
-	object.primitive_poses.push_back(pose);
+	//object.primitives.push_back(primitive);
+	//object.primitive_poses.push_back(pose);
 
-	// add object to scene
-	object.operation = object.ADD;
-	v.push_back(object);
+	//// add object to scene
+	//object.operation = object.ADD;
+	//v.push_back(object);
 
 
 
 	p.addCollisionObjects(v);
-	return object;
+	return;
 }
 
+
+moveit::planning_interface::MoveGroup* group_ptr;
+
+void pose_cb(const geometry_msgs::PoseConstPtr& msg){
+	moveit::planning_interface::MoveGroup& group = *group_ptr;
+	group.setStartStateToCurrentState();
+	geometry_msgs::Pose target_pos;
+
+	target_pos.position.x = msg->position.x;
+	target_pos.position.y = msg->position.y;
+	target_pos.position.z = msg->position.z + 0.1; // 10cm above
+
+	// looking down
+	target_pos.orientation.x = 0.0;
+	target_pos.orientation.y = 0.707;
+	target_pos.orientation.z = 0.0;
+	target_pos.orientation.w = 0.707; 
+
+	group.setPoseTarget(target_pos);
+
+	geometry_msgs::Point p = target_pos.position;
+	//group.setPositionTarget(p.x, p.y, p.z, "link_5");
+
+	moveit::planning_interface::MoveGroup::Plan my_plan;
+	bool success = group.plan(my_plan);
+	ROS_INFO("Random Pose Goal %s",success?"":"FAILED");
+	if (success){ // success
+		group.move();
+	}
+}
 int main(int argc, char **argv)
 {
 	ros::init(argc, argv, "edwin_move_group_interface");
-	ros::NodeHandle node_handle;  
+	ros::NodeHandle nh;  
+	ros::Subscriber sub = nh.subscribe("obj_pose", 10, pose_cb);
 	ros::AsyncSpinner spinner(1);
-	spinner.start();
 
+	spinner.start();
 
 	/* This sleep is ONLY to allow Rviz to come up */
 	// BEGIN_TUTORIAL
@@ -122,12 +156,25 @@ int main(int argc, char **argv)
 	// The :move_group_interface:`MoveGroup` class can be easily 
 	// setup using just the name
 	// of the group you would like to control and plan for.
+	
 	moveit::planning_interface::MoveGroup group("arm_group");
+	group_ptr = &group; 
+
+	group.setGoalPositionTolerance(0.03); // 3cm tolerance
+	group.setGoalOrientationTolerance(0.017); // 1 deg. tolerance
+
+	//ROS_INFO("POSITION TOLERANCE : %f", group.getGoalPositionTolerance());
+	//ROS_INFO("ORIENTATION TOLERANCE : %f", group.getGoalPositionTolerance());
 
 	// We will use the :planning_scene_interface:`PlanningSceneInterface`
 	// class to deal directly with the world.
 	moveit::planning_interface::PlanningSceneInterface planning_scene_interface;  
-	moveit_msgs::CollisionObject obj = spawnObject(planning_scene_interface);
+	spawnObject(planning_scene_interface);
+
+	group.setSupportSurfaceName("table");
+	group.setStartState(*group.getCurrentState());
+	group.setWorkspace(-2,-2,-2,2,2,2);
+	//group.setStartStateToCurrentState();
 
 	// (Optional) Create a publisher for visualizing plans in Rviz.
 	//ros::Publisher display_publisher = node_handle.advertise<moveit_msgs::DisplayTrajectory>("/move_group/display_planned_path", 1, true);
@@ -146,21 +193,41 @@ int main(int argc, char **argv)
 	// ^^^^^^^^^^^^^^^^^^^^^^^
 	// We can plan a motion for this group to a desired pose for the 
 	// end-effector.
-	geometry_msgs::Pose target_pose1;
+	geometry_msgs::Pose target_pose1 = group.getCurrentPose("link_5").pose;
 
-	tf::Quaternion q1(tf::Vector3(0,1,0), 0);
-	tf::Quaternion q2(tf::Vector3(0,0,1), 0);
+	std::vector<double> v = group.getCurrentJointValues();
+	for(std::vector<double>::iterator it = v.begin(); it != v.end(); ++it){
+		std::cout << (*it) << ' ';
+	}
+	std::cout << std::endl;
 
-	tf::Quaternion q = q2*q1;
+	geometry_msgs::Pose& t = target_pose1;
 
-	tf::quaternionTFToMsg(q, target_pose1.orientation);
+	ROS_INFO("%f %f %f | %f %f %f %f\n", t.position.x, t.position.y, t.position.z, t.orientation.x, t.orientation.y, t.orientation.z, t.orientation.w);
 
-	target_pose1.position.x = 0.0;
-	target_pose1.position.y = 0.02;
-	target_pose1.position.z = 1.1474;
+	//target_pose1.position.x = 0.6;
+	//target_pose1.position.z = 0.4;
 
+	//tf::Quaternion q1(tf::Vector3(0,0,1), 1.57);
+	//tf::quaternionMsgToTF(target_pose1.orientation, q1);
+
+	////group.setGoalOrientationTolerance(0.01);
+
+	//tf::Quaternion q2(tf::Vector3(0,1,0), 1.57);
+	//tf::Quaternion q = q1;//q2*q1;
+	//tf::quaternionTFToMsg(q, target_pose1.orientation);
+
+	target_pose1.orientation.x = 0.805;
+	target_pose1.orientation.y = 0.088;
+	target_pose1.orientation.z = -0.551;
+	target_pose1.orientation.w = 0.203;
+	target_pose1.position.x = 0.317;
+	target_pose1.position.y = -0.044;
+	target_pose1.position.z = 0.419;
+
+	//group.setPlanningTime(5.0);
 	group.setPlanningTime(5.0);
-	//group.setPoseReferenceFrame("base_link");
+	group.setPoseReferenceFrame("base_link");
 	group.setPoseTarget(target_pose1);
 
 	// Now, we call the planner to compute the plan
@@ -168,14 +235,17 @@ int main(int argc, char **argv)
 	// Note that we are just planning, not asking move_group 
 	// to actually move the robot.
 	moveit::planning_interface::MoveGroup::Plan my_plan;
-
 	bool success = group.plan(my_plan);
-
-	ROS_INFO("Plan 1 %s",success?"SUCCESS":"FAILED");    
+	ROS_INFO("Plan 1 %s",success?"SUCCESS :)":"FAILED :(");    
 
 	if(success)
 		group.move();
 
+	t = group.getCurrentPose("link_5").pose;
+	ROS_INFO("%f %f %f | %f %f %f %f\n", t.position.x, t.position.y, t.position.z, t.orientation.x, t.orientation.y, t.orientation.z, t.orientation.w);
+
+#define GO_HOME
+//
 	// Visualizing plans
 	// ^^^^^^^^^^^^^^^^^
 	// Now that we have a plan we can visualize it in Rviz.  This is not
@@ -213,6 +283,7 @@ int main(int argc, char **argv)
 	// pose target we set above.
 	//
 	// First get the current set of joint values for the group.
+#ifdef GO_HOME
 	std::vector<double> group_variable_values;
 	group.getCurrentState()->copyJointGroupPositions(group.getCurrentState()->getRobotModel()->getJointModelGroup(group.getName()), group_variable_values);
 
@@ -225,9 +296,17 @@ int main(int argc, char **argv)
 	group.setJointValueTarget(group_variable_values);
 	success = group.plan(my_plan);
 	ROS_INFO("Plan 2 (joint space goal) %s",success?"":"FAILED");
-
 	if(success)
 		group.move();
+#endif
+
+
+	// from here listen to callbacks
+	ros::Rate r = ros::Rate(10.0);
+	while(ros::ok()){
+		ros::spinOnce();
+		r.sleep();
+	}
 
 	//sleep(3.0); // sleep for 10 sec.
 
@@ -406,7 +485,7 @@ int main(int argc, char **argv)
 	//planning_scene_interface.removeCollisionObjects(object_ids);
 	///* Sleep to give Rviz time to show the object is no longer there. */
 	//sleep(4.0);
-
+	
 	ros::shutdown();  
 	return 0;
 }

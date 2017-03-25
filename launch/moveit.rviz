@@ -4,7 +4,6 @@ Panels:
     Name: Displays
     Property Tree Widget:
       Expanded:
-        - /MotionPlanning1
         - /MotionPlanning1/Planning Request1
         - /MotionPlanning1/Planning Metrics1
         - /MotionPlanning1/Planned Path1
@@ -67,6 +66,11 @@ Visualization Manager:
           Expand Tree: false
           Link Tree Style: Links in Alphabetic Order
           base_link:
+            Alpha: 1
+            Show Axes: false
+            Show Trail: false
+            Value: true
+          jaw_link:
             Alpha: 1
             Show Axes: false
             Show Trail: false
@@ -145,6 +149,11 @@ Visualization Manager:
             Show Axes: false
             Show Trail: false
             Value: true
+          jaw_link:
+            Alpha: 1
+            Show Axes: false
+            Show Trail: false
+            Value: true
           link_1:
             Alpha: 1
             Show Axes: false
@@ -174,6 +183,13 @@ Visualization Manager:
         Show Robot Collision: false
         Show Robot Visual: true
       Value: true
+    - Class: rviz/Axes
+      Enabled: true
+      Length: 1
+      Name: Axes
+      Radius: 0.1
+      Reference Frame: <Fixed Frame>
+      Value: true
   Enabled: true
   Global Options:
     Background Color: 48; 48; 48
@@ -201,10 +217,10 @@ Visualization Manager:
         Z: 2.23518e-07
       Name: Current View
       Near Clip Distance: 0.01
-      Pitch: 0.214797
+      Pitch: 0.619797
       Target Frame: base_link
       Value: XYOrbit (rviz)
-      Yaw: 3.65677
+      Yaw: 2.91676
     Saved: ~
 Window Geometry:
   Displays:
