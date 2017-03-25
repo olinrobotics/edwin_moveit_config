@@ -105,9 +105,6 @@ void spawnObject(moveit::planning_interface::PlanningSceneInterface& p){
 	//// add object to scene
 	//object.operation = object.ADD;
 	//v.push_back(object);
-
-
-
 	p.addCollisionObjects(v);
 	return;
 }
@@ -117,68 +114,28 @@ moveit::planning_interface::MoveGroup* group_ptr;
 
 ros::Publisher marker_pub;
 visualization_msgs::Marker marker_msg;
+tf::TransformListener* listener;
 
-void pose_cb(const geometry_msgs::PoseConstPtr& msg){
+void obj_cb(const geometry_msgs::PointStampedConstPtr& msg){
 	moveit::planning_interface::MoveGroup& group = *group_ptr;
 	group.setStartStateToCurrentState();
-	geometry_msgs::Pose target_pos;
 
-	int n = 5;
+	geometry_msgs::PointStamped target_point;
+	listener->transformPoint("base_link", *msg, target_point);
 
-	float grip_dist = 0.05; // 5 cm
-
-	tf::Vector3 x(1,0,0);
-
-	target_pos.position.x = msg->position.x;
-	target_pos.position.y = msg->position.y;
-	target_pos.position.z = msg->position.z; // 10cm above
-	//geometry_msgs::Quaternion& ori = target_pos.orientation;
-
-	marker_msg.pose.position = target_pos.position;
+	marker_msg.pose.position = target_point.point;
 	marker_pub.publish(marker_msg);
 
 	moveit::planning_interface::MoveGroup::Plan my_plan;
 
-	//for(float theta = -M_PI/2; theta <= M_PI/2; theta += M_PI/n){
-	//	for(float phi = -M_PI/2; phi <= 0; phi += M_PI/2/n){
-	//		tf::Vector3 v(cos(phi)*cos(theta), cos(phi)*sin(theta), sin(phi));
-	//		float d = tf::tfDot(x,v);
-	//		if( fabs(d) > 0.9999){
-	//			// parallel
-	//			if(d>0){
-	//				ori.x = ori.y = ori.z = 0;
-	//				ori.w = 1;
-	//			}else{
-	//				// opposite dir.
-	//				tf::quaternionTFToMsg(tf::Quaternion(tf::Vector3(0,1,0),M_PI),ori);
-	//			}
-	//		}else{
-	//			// v = vector destination (heading)
-	//			tf::Vector3 a = tf::tfCross(x,v);
-	//			ori.x = a.getX();
-	//			ori.y = a.getY();
-	//			ori.z = a.getZ();
-	//			ori.w = 1 + tf::tfDot(x,v);
-	//			// normalize
-	//			float s = sqrt(ori.x*ori.x + ori.y*ori.y + ori.z*ori.z + ori.w*ori.w);
-	//			ori.x /= s; ori.y /= s; ori.z /= s; ori.w /= s;
-	//		}
-
-	//		group.setPoseTarget(target_pos);
-	//		bool success = group.plan(my_plan);
-	//		if(success){
-	//			ROS_INFO("Random Pose Goal SUCCESS: phi = %f", phi);
-	//			group.move();
-	//			return;
-	//		}
-	//	}
-	//}
 	group.setPositionTarget(
-			target_pos.position.x,
-			target_pos.position.y,
-			target_pos.position.z,
+			target_point.point.x,
+			target_point.point.y,
+			target_point.point.z,
 			"link_5");
+
 	bool success = group.plan(my_plan);
+
 	if(success){
 		ROS_INFO("Random Pose Goal SUCCESS (Position), No Move");
 		group.move();
@@ -192,9 +149,11 @@ int main(int argc, char **argv)
 {
 	ros::init(argc, argv, "edwin_move_group_interface");
 	ros::NodeHandle nh;  
-	ros::Subscriber sub = nh.subscribe("obj_pose", 10, pose_cb);
+	ros::Subscriber sub = nh.subscribe("obj_point", 10, obj_cb);
 
 	marker_pub = nh.advertise<visualization_msgs::Marker>("obj_marker", 10, true);
+
+	listener = new tf::TransformListener();
 
 	ros::Publisher valid_marker_pub = nh.advertise<visualization_msgs::Marker>("valid_marker", 10, true);
 	visualization_msgs::Marker valid_marker_msg;
@@ -210,7 +169,7 @@ int main(int argc, char **argv)
 	marker_msg.color.r = 1;
 	marker_msg.color.g = 0;
 	marker_msg.color.b = 1;
-	
+
 	ros::AsyncSpinner spinner(1);
 
 	spinner.start();
@@ -226,13 +185,11 @@ int main(int argc, char **argv)
 	// of the group you would like to control and plan for.
 	
 	moveit::planning_interface::MoveGroup group("arm_group");
+	group.setNumPlanningAttempts(3); // attempt three times
 	group_ptr = &group; 
 
 	group.setGoalPositionTolerance(0.03); // 3cm tolerance
-	group.setGoalOrientationTolerance(0.017); // 1 deg. tolerance
-
-	//ROS_INFO("POSITION TOLERANCE : %f", group.getGoalPositionTolerance());
-	//ROS_INFO("ORIENTATION TOLERANCE : %f", group.getGoalPositionTolerance());
+	group.setGoalOrientationTolerance(0.034); // 2 deg. tolerance
 
 	// We will use the :planning_scene_interface:`PlanningSceneInterface`
 	// class to deal directly with the world.
@@ -240,8 +197,8 @@ int main(int argc, char **argv)
 	spawnObject(planning_scene_interface);
 
 	group.setSupportSurfaceName("table");
-	group.setStartState(*group.getCurrentState());
-	group.setWorkspace(-2,-2,-2,2,2,2);
+	group.setStartStateToCurrentState();
+	group.setWorkspace(-2,-2,0,2,2,2);
 	//group.setStartStateToCurrentState();
 
 	// (Optional) Create a publisher for visualizing plans in Rviz.
@@ -557,5 +514,6 @@ int main(int argc, char **argv)
 	//sleep(4.0);
 	
 	ros::shutdown();  
+	delete listener;
 	return 0;
 }
