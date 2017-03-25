@@ -132,48 +132,47 @@ void pose_cb(const geometry_msgs::PoseConstPtr& msg){
 	target_pos.position.x = msg->position.x;
 	target_pos.position.y = msg->position.y;
 	target_pos.position.z = msg->position.z; // 10cm above
-	geometry_msgs::Quaternion& ori = target_pos.orientation;
+	//geometry_msgs::Quaternion& ori = target_pos.orientation;
 
 	marker_msg.pose.position = target_pos.position;
 	marker_pub.publish(marker_msg);
 
 	moveit::planning_interface::MoveGroup::Plan my_plan;
 
-	for(float theta = -M_PI/2; theta <= M_PI/2; theta += M_PI/n){
-		for(float phi = -M_PI/2; phi <= 0; phi += M_PI/2/n){
-			tf::Vector3 v(cos(phi)*cos(theta), cos(phi)*sin(theta), sin(phi));
-			float d = tf::tfDot(x,v);
-			if( fabs(d) > 0.9999){
-				// parallel
-				if(d>0){
-					ori.x = ori.y = ori.z = 0;
-					ori.w = 1;
-				}else{
-					// opposite dir.
-					tf::quaternionTFToMsg(tf::Quaternion(tf::Vector3(0,1,0),M_PI),ori);
-				}
-			}else{
-				// v = vector destination (heading)
-				tf::Vector3 a = tf::tfCross(x,v);
-				ori.x = a.getX();
-				ori.y = a.getY();
-				ori.z = a.getZ();
-				ori.w = 1 + tf::tfDot(x,v);
-				// normalize
-				float s = sqrt(ori.x*ori.x + ori.y*ori.y + ori.z*ori.z + ori.w*ori.w);
-				ori.x /= s; ori.y /= s; ori.z /= s; ori.w /= s;
-			}
+	//for(float theta = -M_PI/2; theta <= M_PI/2; theta += M_PI/n){
+	//	for(float phi = -M_PI/2; phi <= 0; phi += M_PI/2/n){
+	//		tf::Vector3 v(cos(phi)*cos(theta), cos(phi)*sin(theta), sin(phi));
+	//		float d = tf::tfDot(x,v);
+	//		if( fabs(d) > 0.9999){
+	//			// parallel
+	//			if(d>0){
+	//				ori.x = ori.y = ori.z = 0;
+	//				ori.w = 1;
+	//			}else{
+	//				// opposite dir.
+	//				tf::quaternionTFToMsg(tf::Quaternion(tf::Vector3(0,1,0),M_PI),ori);
+	//			}
+	//		}else{
+	//			// v = vector destination (heading)
+	//			tf::Vector3 a = tf::tfCross(x,v);
+	//			ori.x = a.getX();
+	//			ori.y = a.getY();
+	//			ori.z = a.getZ();
+	//			ori.w = 1 + tf::tfDot(x,v);
+	//			// normalize
+	//			float s = sqrt(ori.x*ori.x + ori.y*ori.y + ori.z*ori.z + ori.w*ori.w);
+	//			ori.x /= s; ori.y /= s; ori.z /= s; ori.w /= s;
+	//		}
 
-			group.setPoseTarget(target_pos);
-			bool success = group.plan(my_plan);
-			if(success){
-				ROS_INFO("Random Pose Goal SUCCESS: phi = %f", phi);
-				group.move();
-				return;
-			}
-		}
-	}
-
+	//		group.setPoseTarget(target_pos);
+	//		bool success = group.plan(my_plan);
+	//		if(success){
+	//			ROS_INFO("Random Pose Goal SUCCESS: phi = %f", phi);
+	//			group.move();
+	//			return;
+	//		}
+	//	}
+	//}
 	group.setPositionTarget(
 			target_pos.position.x,
 			target_pos.position.y,
@@ -182,7 +181,7 @@ void pose_cb(const geometry_msgs::PoseConstPtr& msg){
 	bool success = group.plan(my_plan);
 	if(success){
 		ROS_INFO("Random Pose Goal SUCCESS (Position), No Move");
-		//group.move();
+		group.move();
 		return;
 	}
 
@@ -194,7 +193,13 @@ int main(int argc, char **argv)
 	ros::init(argc, argv, "edwin_move_group_interface");
 	ros::NodeHandle nh;  
 	ros::Subscriber sub = nh.subscribe("obj_pose", 10, pose_cb);
+
 	marker_pub = nh.advertise<visualization_msgs::Marker>("obj_marker", 10, true);
+
+	ros::Publisher valid_marker_pub = nh.advertise<visualization_msgs::Marker>("valid_marker", 10, true);
+	visualization_msgs::Marker valid_marker_msg;
+	ros::Publisher valid_marker_pub_2 = nh.advertise<visualization_msgs::Marker>("valid_marker_2", 10, true);
+	visualization_msgs::Marker valid_marker_msg_2;
 
 	marker_msg.header.frame_id = "/odom";
 	marker_msg.scale.x = marker_msg.scale.y = marker_msg.scale.z = 0.05;
@@ -268,18 +273,6 @@ int main(int argc, char **argv)
 
 	ROS_INFO("%f %f %f | %f %f %f %f\n", t.position.x, t.position.y, t.position.z, t.orientation.x, t.orientation.y, t.orientation.z, t.orientation.w);
 
-	//target_pose1.position.x = 0.6;
-	//target_pose1.position.z = 0.4;
-
-	//tf::Quaternion q1(tf::Vector3(0,0,1), 1.57);
-	//tf::quaternionMsgToTF(target_pose1.orientation, q1);
-
-	////group.setGoalOrientationTolerance(0.01);
-
-	//tf::Quaternion q2(tf::Vector3(0,1,0), 1.57);
-	//tf::Quaternion q = q1;//q2*q1;
-	//tf::quaternionTFToMsg(q, target_pose1.orientation);
-
 	target_pose1.orientation.x = 0.805;
 	target_pose1.orientation.y = 0.088;
 	target_pose1.orientation.z = -0.551;
@@ -288,15 +281,10 @@ int main(int argc, char **argv)
 	target_pose1.position.y = -0.044;
 	target_pose1.position.z = 0.419;
 
-	//group.setPlanningTime(5.0);
 	group.setPlanningTime(5.0);
 	group.setPoseReferenceFrame("base_link");
 	group.setPoseTarget(target_pose1);
 
-	// Now, we call the planner to compute the plan
-	// and visualize it.
-	// Note that we are just planning, not asking move_group 
-	// to actually move the robot.
 	moveit::planning_interface::MoveGroup::Plan my_plan;
 	bool success = group.plan(my_plan);
 	ROS_INFO("Plan 1 %s",success?"SUCCESS :)":"FAILED :(");    
@@ -307,7 +295,6 @@ int main(int argc, char **argv)
 	t = group.getCurrentPose("link_5").pose;
 	ROS_INFO("%f %f %f | %f %f %f %f\n", t.position.x, t.position.y, t.position.z, t.orientation.x, t.orientation.y, t.orientation.z, t.orientation.w);
 
-#define GO_HOME
 //
 	// Visualizing plans
 	// ^^^^^^^^^^^^^^^^^
@@ -325,27 +312,7 @@ int main(int argc, char **argv)
 	//  sleep(5.0);
 	//}
 
-	// Moving to a pose goal
-	// ^^^^^^^^^^^^^^^^^^^^^
-	//
-	// Moving to a pose goal is similar to the step above
-	// except we now use the move() function. Note that
-	// the pose goal we had set earlier is still active 
-	// and so the robot will try to move to that goal. We will
-	// not use that function in this tutorial since it is 
-	// a blocking function and requires a controller to be active
-	// and report success on execution of a trajectory.
-
-	/* Uncomment below line when working with a real robot*/
-	/* group.move() */
-
-	// Planning to a joint-space goal 
-	// ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-	//
-	// Let's set a joint space goal and move towards it.  This will replace the
-	// pose target we set above.
-	//
-	// First get the current set of joint values for the group.
+#define GO_HOME
 #ifdef GO_HOME
 	std::vector<double> group_variable_values;
 	group.getCurrentState()->copyJointGroupPositions(group.getCurrentState()->getRobotModel()->getJointModelGroup(group.getName()), group_variable_values);
@@ -363,6 +330,46 @@ int main(int argc, char **argv)
 		group.move();
 #endif
 
+//#define VALIDATE_POSITIONS
+#ifdef VALIDATE_POSITIONS
+	group.setStartStateToCurrentState();
+	moveit::planning_interface::MoveGroup::Plan valid_plan;
+	geometry_msgs::Point& p = marker_msg.pose.position;
+
+	valid_marker_msg = marker_msg;
+	valid_marker_msg.type = 8;
+
+	valid_marker_msg_2 = valid_marker_msg;
+
+	// validate marker positions
+	for(float x=-0.8; x<=0.8; x+=0.1){
+		for(float y=-1.0; y<=1.0; y+=0.1){
+			for(float z=0.0; z<=1.5;z+=0.1){
+				ROS_INFO("x:%f,y:%f,z:%f\n",x,y,z);
+				p.x = x;
+				p.y = y;
+				p.z = z;
+				group.setPositionTarget(x,y,z,"link_5");
+				bool success = group.plan(valid_plan);
+				std_msgs::ColorRGBA col;
+				col.a = 1.0;
+				if(success){
+					col.g=col.b=1.0;
+					col.r=0.0;
+					valid_marker_msg_2.colors.push_back(col);
+					valid_marker_msg_2.points.push_back(p);
+					valid_marker_pub_2.publish(valid_marker_msg_2);
+				}else{
+					col.g=col.b=0.0;
+					col.r=1.0;
+				}
+				valid_marker_msg.colors.push_back(col);
+				valid_marker_msg.points.push_back(p);
+				valid_marker_pub.publish(valid_marker_msg);
+			}
+		}
+	}
+#endif
 
 	// from here listen to callbacks
 	ros::Rate r = ros::Rate(10.0);
