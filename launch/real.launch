@@ -6,7 +6,7 @@
 
 	<!-- By default, we are not in debug mode -->
 	<arg name="debug" default="false" />
-	<arg name="rviz" default="false" />
+	<arg name="rviz" default="true" />
 
 	<!--<node name="edwin_hardware_node" pkg="edwin_moveit_config" type="edwin_hardware_node"
 		ns="edwin" output="screen">

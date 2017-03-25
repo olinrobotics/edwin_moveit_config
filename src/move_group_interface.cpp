@@ -52,6 +52,10 @@
 #include <iostream>
 #include <memory>
 
+#ifndef M_PI
+#define M_PI 3.14159265358979
+#endif
+
 void spawnObject(moveit::planning_interface::PlanningSceneInterface& p){
 	moveit_msgs::PlanningScene planning_scene;
 	planning_scene.is_diff = true;
@@ -111,38 +115,97 @@ void spawnObject(moveit::planning_interface::PlanningSceneInterface& p){
 
 moveit::planning_interface::MoveGroup* group_ptr;
 
+ros::Publisher marker_pub;
+visualization_msgs::Marker marker_msg;
+
 void pose_cb(const geometry_msgs::PoseConstPtr& msg){
 	moveit::planning_interface::MoveGroup& group = *group_ptr;
 	group.setStartStateToCurrentState();
 	geometry_msgs::Pose target_pos;
 
+	int n = 5;
+
+	float grip_dist = 0.05; // 5 cm
+
+	tf::Vector3 x(1,0,0);
+
 	target_pos.position.x = msg->position.x;
 	target_pos.position.y = msg->position.y;
-	target_pos.position.z = msg->position.z + 0.1; // 10cm above
+	target_pos.position.z = msg->position.z; // 10cm above
+	geometry_msgs::Quaternion& ori = target_pos.orientation;
 
-	// looking down
-	target_pos.orientation.x = 0.0;
-	target_pos.orientation.y = 0.707;
-	target_pos.orientation.z = 0.0;
-	target_pos.orientation.w = 0.707; 
-
-	group.setPoseTarget(target_pos);
-
-	geometry_msgs::Point p = target_pos.position;
-	//group.setPositionTarget(p.x, p.y, p.z, "link_5");
+	marker_msg.pose.position = target_pos.position;
+	marker_pub.publish(marker_msg);
 
 	moveit::planning_interface::MoveGroup::Plan my_plan;
-	bool success = group.plan(my_plan);
-	ROS_INFO("Random Pose Goal %s",success?"":"FAILED");
-	if (success){ // success
-		group.move();
+
+	for(float theta = -M_PI/2; theta <= M_PI/2; theta += M_PI/n){
+		for(float phi = -M_PI/2; phi <= 0; phi += M_PI/2/n){
+			tf::Vector3 v(cos(phi)*cos(theta), cos(phi)*sin(theta), sin(phi));
+			float d = tf::tfDot(x,v);
+			if( fabs(d) > 0.9999){
+				// parallel
+				if(d>0){
+					ori.x = ori.y = ori.z = 0;
+					ori.w = 1;
+				}else{
+					// opposite dir.
+					tf::quaternionTFToMsg(tf::Quaternion(tf::Vector3(0,1,0),M_PI),ori);
+				}
+			}else{
+				// v = vector destination (heading)
+				tf::Vector3 a = tf::tfCross(x,v);
+				ori.x = a.getX();
+				ori.y = a.getY();
+				ori.z = a.getZ();
+				ori.w = 1 + tf::tfDot(x,v);
+				// normalize
+				float s = sqrt(ori.x*ori.x + ori.y*ori.y + ori.z*ori.z + ori.w*ori.w);
+				ori.x /= s; ori.y /= s; ori.z /= s; ori.w /= s;
+			}
+
+			group.setPoseTarget(target_pos);
+			bool success = group.plan(my_plan);
+			if(success){
+				ROS_INFO("Random Pose Goal SUCCESS: phi = %f", phi);
+				group.move();
+				return;
+			}
+		}
 	}
+
+	group.setPositionTarget(
+			target_pos.position.x,
+			target_pos.position.y,
+			target_pos.position.z,
+			"link_5");
+	bool success = group.plan(my_plan);
+	if(success){
+		ROS_INFO("Random Pose Goal SUCCESS (Position), No Move");
+		//group.move();
+		return;
+	}
+
+	ROS_INFO("Random Pose Goal FAIL");
 }
+
 int main(int argc, char **argv)
 {
 	ros::init(argc, argv, "edwin_move_group_interface");
 	ros::NodeHandle nh;  
 	ros::Subscriber sub = nh.subscribe("obj_pose", 10, pose_cb);
+	marker_pub = nh.advertise<visualization_msgs::Marker>("obj_marker", 10, true);
+
+	marker_msg.header.frame_id = "/odom";
+	marker_msg.scale.x = marker_msg.scale.y = marker_msg.scale.z = 0.05;
+	marker_msg.type = marker_msg.SPHERE;
+	marker_msg.id = 0;
+	marker_msg.pose.orientation.w = 1.0; // believe auto filled to 0
+	marker_msg.color.a = 1;
+	marker_msg.color.r = 1;
+	marker_msg.color.g = 0;
+	marker_msg.color.b = 1;
+	
 	ros::AsyncSpinner spinner(1);
 
 	spinner.start();
