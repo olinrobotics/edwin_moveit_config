@@ -3,6 +3,8 @@
 # Joint limits can be turned off with [has_velocity_limits, has_acceleration_limits]
 joint_limits:
   waist:
+    max_position: 3.1
+    min_position: -3.1
     has_velocity_limits: false
     max_velocity: 0
     has_acceleration_limits: false

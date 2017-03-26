@@ -7,6 +7,7 @@
 	<!-- By default, we are not in debug mode -->
 	<arg name="debug" default="false" />
 	<arg name="rviz" default="true" />
+	<arg name="kinect" default="false" />
 
 	<!--<node name="edwin_hardware_node" pkg="edwin_moveit_config" type="edwin_hardware_node"
 		ns="edwin" output="screen">
@@ -54,7 +55,7 @@
   <!-- Run Rviz and load the default config to see the state of the move_group node -->
   <group if="$(arg rviz)">
 	  <include file="$(find edwin_moveit_config)/launch/moveit_rviz.launch">
-		  <arg name="config" value="true"/>
+		  <arg name="kinect" value="$(arg kinect)"/>
 		  <arg name="debug" value="$(arg debug)"/>
 	  </include>
   </group>
