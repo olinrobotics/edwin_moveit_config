@@ -805,6 +805,8 @@ bool IKFastKinematicsPlugin::searchPositionIK(const geometry_msgs::Pose &ik_pose
     }
 
     // check for collisions if a callback is provided
+	//ROS_INFO("SOLUTION CALLBACK? %s", (solution_callback.empty()?"NONE":"EXISTS"));
+
     if( !solution_callback.empty() )
     {
       solution_callback(ik_pose, solution, error_code);
@@ -996,6 +998,7 @@ bool IKFastKinematicsPlugin::getPositionIK(const geometry_msgs::Pose &ik_pose,
                                            const kinematics::KinematicsQueryOptions &options) const
 {
   ROS_DEBUG_STREAM_NAMED("ikfast","getPositionIK");
+  ROS_INFO("SOLUTION");
 
   if(!active_)
   {
@@ -1065,6 +1068,7 @@ bool IKFastKinematicsPlugin::getPositionIK(const std::vector<geometry_msgs::Pose
                                            const kinematics::KinematicsQueryOptions &options) const
 {
   ROS_DEBUG_STREAM_NAMED("ikfast","getPositionIK with multiple solutions");
+  ROS_INFO("SOLUTIONS");
 
   if(!active_)
   {

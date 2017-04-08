@@ -49,6 +49,7 @@
 #include <moveit_simple_grasps/grasp_data.h>
 #include <moveit_visual_tools/moveit_visual_tools.h>
 
+#include "std_msgs/Float64MultiArray.h"
 #include <iostream>
 #include <memory>
 
@@ -111,38 +112,126 @@ void spawnObject(moveit::planning_interface::PlanningSceneInterface& p){
 
 
 moveit::planning_interface::MoveGroup* group_ptr;
+const moveit::core::JointModelGroup* j_group_ptr;
 
 ros::Publisher marker_pub;
 visualization_msgs::Marker marker_msg;
 tf::TransformListener* listener;
 
 void obj_cb(const geometry_msgs::PointStampedConstPtr& msg){
+	if(group_ptr == NULL && j_group_ptr == NULL)
+		return;
+
+	typedef std::vector<double> d_vec;
+
 	moveit::planning_interface::MoveGroup& group = *group_ptr;
 	group.setStartStateToCurrentState();
 
 	geometry_msgs::PointStamped target_point;
-	listener->transformPoint("base_link", *msg, target_point);
+	try{
+		listener->transformPoint("base_link", *msg, target_point);
+	}catch(...){
+		target_point.header.frame_id = "base_link";
+		target_point.header.stamp = ros::Time::now();
+		target_point.point = msg->point;
+	}
 
 	marker_msg.pose.position = target_point.point;
 	marker_pub.publish(marker_msg);
 
 	moveit::planning_interface::MoveGroup::Plan my_plan;
 
-	group.setPositionTarget(
-			target_point.point.x,
-			target_point.point.y,
-			target_point.point.z,
-			"link_5");
+	//group.setPositionTarget(
+	//		target_point.point.x,
+	//		target_point.point.y,
+	//		target_point.point.z,
+	//		"link_5");
+	geometry_msgs::Pose target_pose;
+	target_pose.position = target_point.point;
+	target_pose.position.x += 0.036; //adjust x so that the gripper would be aligned with the object
+	target_pose.position.z += 0.16;  //raise a little bit
+
+	tf::Quaternion q1 = tf::Quaternion(tf::Vector3(0,1,0),M_PI/2);
+	tf::Quaternion q2 = tf::Quaternion(tf::Vector3(0,0,1),0);
+	tf::Quaternion q = q1*q2;
+
+	tf::quaternionTFToMsg(q, target_pose.orientation);
+	group.setPoseTarget(target_pose,"link_5");
 
 	bool success = group.plan(my_plan);
 
 	if(success){
-		ROS_INFO("Random Pose Goal SUCCESS (Position), No Move");
+		ROS_INFO("Random Pose Goal SUCCESS");
 		group.move();
 		return;
+	}else{
+		if(j_group_ptr != NULL){
+			const moveit::core::JointModelGroup& j_group = *j_group_ptr;
+			const kinematics::KinematicsBaseConstPtr& solver_ptr = j_group.getSolverInstance();
+
+			std::vector<geometry_msgs::Pose> target_pose_v;
+			target_pose_v.push_back(target_pose);
+
+			d_vec seed_pose;
+			group.getCurrentState()->copyJointGroupPositions(group.getCurrentState()->getRobotModel()->getJointModelGroup(group.getName()), seed_pose);
+			std::vector<d_vec> solutions;
+
+			kinematics::KinematicsResult result;
+			kinematics::KinematicsQueryOptions options;
+
+			options.return_approximate_solution = true;
+			options.discretization_method = kinematics::DiscretizationMethods::NO_DISCRETIZATION; // TODO : play with this
+
+			if(solver_ptr->getPositionIK(target_pose_v,seed_pose,solutions,result,options)){
+				ROS_INFO("OTHER IK SOLUTION CANDIDATES FOUND : ");
+				std::cout << std::setprecision(4);
+
+				std::vector<std::string> link_names;
+				link_names.push_back(group.getEndEffectorLink());
+
+				std::vector<geometry_msgs::Pose> dst_pose_v;
+
+				for(std::vector<d_vec>::const_iterator it = solutions.begin(); it != solutions.end(); ++it){
+					const d_vec& sol = (*it);
+					float pitch = fabs(sol[1] + sol[2] + sol[3]);
+
+					if(fabs(fabs(pitch) - M_PI) > 1e-1){
+						// looking for ik solution pointing DOWNWARDS!
+						// Sometimes it searches for things pointing upwards, which doesn't work.
+						continue;
+					}
+
+					//solver_ptr->getPositionFK(link_names,sol,dst_pose_v);
+					//std::cout << dst_pose_v.front() << std::endl;
+
+					group.setJointValueTarget(sol);
+					success = group.plan(my_plan);
+					if(success){
+						//std::cout << sol[1] << ',' << sol[2] << ',' << sol[3] << std::endl;
+						std::cout << sol[1] + sol[2] + sol[3] << std::endl;
+						ROS_INFO("Random Pose Goal SUCCESS");
+						group.move();
+						return;
+					}
+				}
+			}
+		}
+
 	}
 
 	ROS_INFO("Random Pose Goal FAIL");
+}
+
+void joint_cb(const std_msgs::Float64MultiArrayConstPtr& msg){
+	moveit::planning_interface::MoveGroup& group = *group_ptr;
+	group.setStartStateToCurrentState();
+	group.setJointValueTarget(msg->data);
+	moveit::planning_interface::MoveGroup::Plan my_plan;
+	bool success = group.plan(my_plan);
+	ROS_INFO("Joint Request :  %s",success?"SUCCESS":"FAILED");
+	if(success){
+		group.move();
+	}
 }
 
 int main(int argc, char **argv)
@@ -150,6 +239,7 @@ int main(int argc, char **argv)
 	ros::init(argc, argv, "edwin_move_group_interface");
 	ros::NodeHandle nh;  
 	ros::Subscriber sub = nh.subscribe("obj_point", 10, obj_cb);
+	ros::Subscriber sub_j = nh.subscribe("joint_positions", 10, joint_cb);
 
 	marker_pub = nh.advertise<visualization_msgs::Marker>("obj_marker", 10, true);
 
@@ -183,22 +273,33 @@ int main(int argc, char **argv)
 	// The :move_group_interface:`MoveGroup` class can be easily 
 	// setup using just the name
 	// of the group you would like to control and plan for.
-	
+
 	moveit::planning_interface::MoveGroup group("arm_group");
-	group.setNumPlanningAttempts(3); // attempt three times
+
+	try{
+
+		j_group_ptr = group.getRobotModel()->getJointModelGroup("arm_group");
+		ROS_ASSERT(j_group_ptr != NULL);
+	}catch(...){
+		ROS_INFO("FAILURE!!");
+	}
+
+	group.setNumPlanningAttempts(8); // attempt three times
 	group_ptr = &group; 
 
 	group.setGoalPositionTolerance(0.03); // 3cm tolerance
 	group.setGoalOrientationTolerance(0.034); // 2 deg. tolerance
+	group.setGoalJointTolerance(0.034);
 
 	// We will use the :planning_scene_interface:`PlanningSceneInterface`
 	// class to deal directly with the world.
 	moveit::planning_interface::PlanningSceneInterface planning_scene_interface;  
-	spawnObject(planning_scene_interface);
+	//spawnObject(planning_scene_interface);
 
-	group.setSupportSurfaceName("table");
+	//group.setSupportSurfaceName("table");
 	group.setStartStateToCurrentState();
 	group.setWorkspace(-2,-2,0,2,2,2);
+	group.setPlannerId("RRTConnectkConfigDefault");
 	//group.setStartStateToCurrentState();
 
 	// (Optional) Create a publisher for visualizing plans in Rviz.
@@ -214,45 +315,10 @@ int main(int argc, char **argv)
 	// We can also print the name of the end-effector link for this group.
 	ROS_INFO("Reference frame (End Effector): %s", group.getEndEffectorLink().c_str());
 
-	// Planning to a Pose goal
-	// ^^^^^^^^^^^^^^^^^^^^^^^
-	// We can plan a motion for this group to a desired pose for the 
-	// end-effector.
-	geometry_msgs::Pose target_pose1 = group.getCurrentPose("link_5").pose;
+	geometry_msgs::Pose p = group.getCurrentPose().pose;
+	ROS_INFO("Current Pose: %f %f %f | %f %f %f %f\n", p.position.x, p.position.y, p.position.z, p.orientation.x, p.orientation.y, p.orientation.z, p.orientation.w);
 
-	std::vector<double> v = group.getCurrentJointValues();
-	for(std::vector<double>::iterator it = v.begin(); it != v.end(); ++it){
-		std::cout << (*it) << ' ';
-	}
-	std::cout << std::endl;
-
-	geometry_msgs::Pose& t = target_pose1;
-
-	ROS_INFO("%f %f %f | %f %f %f %f\n", t.position.x, t.position.y, t.position.z, t.orientation.x, t.orientation.y, t.orientation.z, t.orientation.w);
-
-	target_pose1.orientation.x = 0.805;
-	target_pose1.orientation.y = 0.088;
-	target_pose1.orientation.z = -0.551;
-	target_pose1.orientation.w = 0.203;
-	target_pose1.position.x = 0.317;
-	target_pose1.position.y = -0.044;
-	target_pose1.position.z = 0.419;
-
-	group.setPlanningTime(5.0);
-	group.setPoseReferenceFrame("base_link");
-	group.setPoseTarget(target_pose1);
-
-	moveit::planning_interface::MoveGroup::Plan my_plan;
-	bool success = group.plan(my_plan);
-	ROS_INFO("Plan 1 %s",success?"SUCCESS :)":"FAILED :(");    
-
-	if(success)
-		group.move();
-
-	t = group.getCurrentPose("link_5").pose;
-	ROS_INFO("%f %f %f | %f %f %f %f\n", t.position.x, t.position.y, t.position.z, t.orientation.x, t.orientation.y, t.orientation.z, t.orientation.w);
-
-//
+	//
 	// Visualizing plans
 	// ^^^^^^^^^^^^^^^^^
 	// Now that we have a plan we can visualize it in Rviz.  This is not
@@ -269,7 +335,7 @@ int main(int argc, char **argv)
 	//  sleep(5.0);
 	//}
 
-#define GO_HOME
+//#define GO_HOME
 #ifdef GO_HOME
 	std::vector<double> group_variable_values;
 	group.getCurrentState()->copyJointGroupPositions(group.getCurrentState()->getRobotModel()->getJointModelGroup(group.getName()), group_variable_values);
@@ -287,7 +353,7 @@ int main(int argc, char **argv)
 		group.move();
 #endif
 
-//#define VALIDATE_POSITIONS
+	//#define VALIDATE_POSITIONS
 #ifdef VALIDATE_POSITIONS
 	group.setStartStateToCurrentState();
 	moveit::planning_interface::MoveGroup::Plan valid_plan;
@@ -330,7 +396,16 @@ int main(int argc, char **argv)
 
 	// from here listen to callbacks
 	ros::Rate r = ros::Rate(10.0);
+	ros::Time last_pose_update = ros::Time::now();
 	while(ros::ok()){
+		//ros::Time now = ros::Time::now();
+		//if( (now - last_pose_update).toSec() > 1.0){
+		//	last_pose_update = now;
+		//	geometry_msgs::PoseStamped p = group.getRandomPose("link_5");
+		//	group.setPoseTarget(p, "link_5");
+		//	if (group.plan(my_plan))
+		//		group.move();
+		//}
 		ros::spinOnce();
 		r.sleep();
 	}
@@ -512,7 +587,7 @@ int main(int argc, char **argv)
 	//planning_scene_interface.removeCollisionObjects(object_ids);
 	///* Sleep to give Rviz time to show the object is no longer there. */
 	//sleep(4.0);
-	
+
 	ros::shutdown();  
 	delete listener;
 	return 0;
