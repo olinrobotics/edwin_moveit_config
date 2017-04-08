@@ -58,9 +58,6 @@
 #endif
 
 void spawnObject(moveit::planning_interface::PlanningSceneInterface& p){
-	moveit_msgs::PlanningScene planning_scene;
-	planning_scene.is_diff = true;
-	planning_scene.robot_state.is_diff = true;
 
 	std::vector<moveit_msgs::CollisionObject> v;
 
@@ -82,7 +79,6 @@ void spawnObject(moveit::planning_interface::PlanningSceneInterface& p){
 	table.primitive_poses.push_back(table_pose);
 	table.operation = table.ADD;
 	v.push_back(table);
-
 
 	// add "OBJECT"
 	//moveit_msgs::CollisionObject object;
@@ -106,7 +102,8 @@ void spawnObject(moveit::planning_interface::PlanningSceneInterface& p){
 	//// add object to scene
 	//object.operation = object.ADD;
 	//v.push_back(object);
-	p.addCollisionObjects(v);
+	//p.addCollisionObjects(v);
+	p.applyCollisionObjects(v);
 	return;
 }
 
@@ -183,7 +180,7 @@ void obj_cb(const geometry_msgs::PointStampedConstPtr& msg){
 			options.discretization_method = kinematics::DiscretizationMethods::NO_DISCRETIZATION; // TODO : play with this
 
 			if(solver_ptr->getPositionIK(target_pose_v,seed_pose,solutions,result,options)){
-				ROS_INFO("OTHER IK SOLUTION CANDIDATES FOUND : ");
+				ROS_INFO("ALTERNATIVE IK SOLUTION CANDIDATES FOUND! ");
 				std::cout << std::setprecision(4);
 
 				std::vector<std::string> link_names;
@@ -196,8 +193,8 @@ void obj_cb(const geometry_msgs::PointStampedConstPtr& msg){
 					float pitch = fabs(sol[1] + sol[2] + sol[3]);
 
 					if(fabs(fabs(pitch) - M_PI) > 1e-1){
-						// looking for ik solution pointing DOWNWARDS!
 						// Sometimes it searches for things pointing upwards, which doesn't work.
+						// Therefore, we're looking for an ik solution pointing DOWNWARDS!
 						continue;
 					}
 
@@ -208,7 +205,6 @@ void obj_cb(const geometry_msgs::PointStampedConstPtr& msg){
 					success = group.plan(my_plan);
 					if(success){
 						//std::cout << sol[1] << ',' << sol[2] << ',' << sol[3] << std::endl;
-						std::cout << sol[1] + sol[2] + sol[3] << std::endl;
 						ROS_INFO("Random Pose Goal SUCCESS");
 						group.move();
 						return;
@@ -294,9 +290,9 @@ int main(int argc, char **argv)
 	// We will use the :planning_scene_interface:`PlanningSceneInterface`
 	// class to deal directly with the world.
 	moveit::planning_interface::PlanningSceneInterface planning_scene_interface;  
-	//spawnObject(planning_scene_interface);
+	spawnObject(planning_scene_interface);
 
-	//group.setSupportSurfaceName("table");
+	group.setSupportSurfaceName("table");
 	group.setStartStateToCurrentState();
 	group.setWorkspace(-2,-2,0,2,2,2);
 	group.setPlannerId("RRTConnectkConfigDefault");

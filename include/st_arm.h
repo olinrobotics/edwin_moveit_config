@@ -15,6 +15,12 @@
 #define W_RATIO 3000
 #define T_RATIO 3000
 
+#define B_LIMIT 15915
+#define S_LIMIT 4718
+#define E_LIMIT 12912
+#define W_LIMIT 2185
+#define T_LIMIT 3594
+
 using namespace LibSerial;
 enum Mode {MODE_CARTESIAN, MODE_JOINT};
 

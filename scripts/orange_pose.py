@@ -15,7 +15,7 @@ d_ker = cv2.getStructuringElement(cv2.MORPH_DILATE, (3,3), (1,1))
 class OrangeFinder(object):
     def __init__(self):
         self.bridge = CvBridge()
-        self.obj_pub = rospy.Publisher('obj_point', PointStamped, queue_size=10, latch=True)
+        self.obj_pub = rospy.Publisher('/obj_point', PointStamped, queue_size=10, latch=True)
         self.image_sub = rospy.Subscriber('/camera/rgb/image_raw', Image, self.im_cb)
         self.cloud_sub = rospy.Subscriber('/camera/depth/points', PointCloud2, self.cl_cb)
         self.image = None

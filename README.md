@@ -51,3 +51,12 @@ roslaunch edwin_moveit_config demo.launch
 roslaunch edwin_moveit_config hardware.launch
 roslaunch edwin_moveit_config real.launch
 ```
+
+
+### TO-DOS For Documentation:
+
+- [ ] How to setup URDF Packages
+- [ ] How to configure MoveIt! For a custom robot
+	- [ ] Setting up the hardware interface
+	- [ ] Setting up move\_group interface`
+- [ ] How to develop custon analytical IK solutions with IKFast
