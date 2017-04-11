@@ -33,6 +33,7 @@ class EdwinInterface: public hardware_interface::RobotHW{
 		ros::Subscriber sub;
 
 		std_msgs::String cmd_msg;
+
 		sensor_msgs::JointState joint_state_msg;
 	public:
 		EdwinInterface(ros::NodeHandle nh, const std::string&);

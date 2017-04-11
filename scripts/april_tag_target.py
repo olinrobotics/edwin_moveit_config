@@ -50,7 +50,7 @@ def main():
     rospy.init_node('april_tag_finder')
     last_published = rospy.Time.now()
     img_sub = rospy.Subscriber('/tag_detections', AprilTagDetectionArray, tag_cb)
-    pt_pub = rospy.Publisher('/obj_point', PointStamped, queue_size=10) # pretend to be can
+    pt_pub = rospy.Publisher('/obj_point', PointStamped, queue_size=1) # pretend to be can
     rospy.spin()
 
 if __name__ == "__main__":

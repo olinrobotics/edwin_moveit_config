@@ -80,6 +80,26 @@ void spawnObject(moveit::planning_interface::PlanningSceneInterface& p){
 	table.operation = table.ADD;
 	v.push_back(table);
 
+	moveit_msgs::CollisionObject kinect;
+	kinect.header.frame_id = "base_link";
+	kinect.id = "kinect";
+
+	shape_msgs::SolidPrimitive kinect_geom;
+	kinect_geom.type = kinect_geom.BOX;
+	kinect_geom.dimensions.push_back(0.28);
+	kinect_geom.dimensions.push_back(0.08);
+	kinect_geom.dimensions.push_back(0.08);
+
+	geometry_msgs::Pose kinect_pose;
+	kinect_pose.orientation.w = 1;
+	kinect_pose.position.x = 0.635;
+	kinect_pose.position.y = 0.30;
+	kinect_pose.position.z = 0.04;
+	kinect.primitives.push_back(kinect_geom);
+	kinect.primitive_poses.push_back(kinect_pose);
+	kinect.operation = kinect.ADD;
+	v.push_back(kinect);
+
 	// add "OBJECT"
 	//moveit_msgs::CollisionObject object;
 	//object.header.frame_id = "odom";
@@ -147,6 +167,8 @@ void obj_cb(const geometry_msgs::PointStampedConstPtr& msg){
 	target_pose.position = target_point.point;
 	target_pose.position.x += 0.036; //adjust x so that the gripper would be aligned with the object
 	target_pose.position.z += 0.16;  //raise a little bit
+	
+	target_pose.position.z += 0.2; // approach object from above
 
 	tf::Quaternion q1 = tf::Quaternion(tf::Vector3(0,1,0),M_PI/2);
 	tf::Quaternion q2 = tf::Quaternion(tf::Vector3(0,0,1),0);
@@ -234,8 +256,8 @@ int main(int argc, char **argv)
 {
 	ros::init(argc, argv, "edwin_move_group_interface");
 	ros::NodeHandle nh;  
-	ros::Subscriber sub = nh.subscribe("obj_point", 10, obj_cb);
-	ros::Subscriber sub_j = nh.subscribe("joint_positions", 10, joint_cb);
+	ros::Subscriber sub = nh.subscribe("obj_point", 1, obj_cb);
+	ros::Subscriber sub_j = nh.subscribe("joint_positions", 1, joint_cb);
 
 	marker_pub = nh.advertise<visualization_msgs::Marker>("obj_marker", 10, true);
 
