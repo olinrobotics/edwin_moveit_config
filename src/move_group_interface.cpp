@@ -50,12 +50,16 @@
 #include <moveit_visual_tools/moveit_visual_tools.h>
 
 #include "std_msgs/Float64MultiArray.h"
+#include "std_msgs/Empty.h"
+
 #include <iostream>
 #include <memory>
 
 #ifndef M_PI
 #define M_PI 3.14159265358979
 #endif
+
+typedef std::vector<double> d_vec;
 
 void spawnObject(moveit::planning_interface::PlanningSceneInterface& p){
 
@@ -135,11 +139,87 @@ ros::Publisher marker_pub;
 visualization_msgs::Marker marker_msg;
 tf::TransformListener* listener;
 
+struct solutionSort{
+	const d_vec& seed_pose;
+	solutionSort(const d_vec& seed_pose):seed_pose(seed_pose){
+	}
+	bool operator()(const d_vec& v_1, const d_vec& v_2){
+		int n = v_1.size();
+		float d_1 = 0.0;
+		float d_2 = 0.0;
+		//ASSERT n == 5
+		for(int i=0; i<n; ++i){
+			d_1 += fabs(v_1[i] - seed_pose[i]);
+			d_2 += fabs(v_2[i] - seed_pose[i]);
+		}	
+		return d_1 < d_2;
+	}	
+};
+
+bool moveToPose(const geometry_msgs::Pose& target_pose){
+	if(group_ptr == NULL || j_group_ptr == NULL)
+		return false;
+	moveit::planning_interface::MoveGroup& group = *group_ptr;
+	group.setStartStateToCurrentState();
+	moveit::planning_interface::MoveGroup::Plan my_plan;
+
+	const moveit::core::JointModelGroup& j_group = *j_group_ptr;
+	const kinematics::KinematicsBaseConstPtr& solver_ptr = j_group.getSolverInstance();
+
+	std::vector<geometry_msgs::Pose> target_pose_v;
+	target_pose_v.push_back(target_pose);
+
+	d_vec seed_pose;
+	group.getCurrentState()->copyJointGroupPositions(group.getCurrentState()->getRobotModel()->getJointModelGroup(group.getName()), seed_pose);
+	std::vector<d_vec> solutions;
+
+	kinematics::KinematicsResult result;
+	kinematics::KinematicsQueryOptions options;
+
+	options.return_approximate_solution = true;
+	options.discretization_method = kinematics::DiscretizationMethods::NO_DISCRETIZATION; // TODO : play with this
+
+	if(solver_ptr->getPositionIK(target_pose_v,seed_pose,solutions,result,options)){
+		ROS_INFO("ALTERNATIVE IK SOLUTION CANDIDATES FOUND! ");
+		std::cout << std::setprecision(4);
+
+		std::vector<std::string> link_names;
+		link_names.push_back(group.getEndEffectorLink());
+
+		// sorting with least difference as beginning, most difference as end
+		// "prefer" a solution closer to the current state
+		std::sort(solutions.begin(), solutions.end(), solutionSort(seed_pose));
+
+		for(std::vector<d_vec>::const_iterator it = solutions.begin(); it != solutions.end(); ++it){
+			const d_vec& sol = (*it);
+			float pitch = fabs(sol[1] + sol[2] + sol[3]);
+			ROS_INFO("PITCH : %f\n", pitch);
+
+			if(fabs(fabs(pitch) - M_PI) > 1e-1){
+				// Sometimes it searches for things pointing upwards, which doesn't work.
+				// Therefore, we're looking for an ik solution pointing DOWNWARDS!
+				continue;
+			}
+
+			group.setJointValueTarget(sol);
+			bool success = group.plan(my_plan);
+			if(success){
+				//std::cout << sol[1] << ',' << sol[2] << ',' << sol[3] << std::endl;
+				ROS_INFO("Random Pose Goal SUCCESS");
+				group.move();
+				return true;
+			}
+		}
+	}
+
+	return false;
+}
+
+geometry_msgs::Pose target_pose;
+
 void obj_cb(const geometry_msgs::PointStampedConstPtr& msg){
 	if(group_ptr == NULL && j_group_ptr == NULL)
 		return;
-
-	typedef std::vector<double> d_vec;
 
 	moveit::planning_interface::MoveGroup& group = *group_ptr;
 	group.setStartStateToCurrentState();
@@ -163,81 +243,29 @@ void obj_cb(const geometry_msgs::PointStampedConstPtr& msg){
 	//		target_point.point.y,
 	//		target_point.point.z,
 	//		"link_5");
-	geometry_msgs::Pose target_pose;
 	target_pose.position = target_point.point;
-	target_pose.position.x += 0.036; //adjust x so that the gripper would be aligned with the object
-	target_pose.position.z += 0.16;  //raise a little bit
-	
-	target_pose.position.z += 0.2; // approach object from above
+	target_pose.position.x += 0.036; // adjust x so that the gripper would be aligned with the object
+	target_pose.position.z += 0.16;  // raise a little bit to have the end of the jaw set at the object
 
 	tf::Quaternion q1 = tf::Quaternion(tf::Vector3(0,1,0),M_PI/2);
 	tf::Quaternion q2 = tf::Quaternion(tf::Vector3(0,0,1),0);
 	tf::Quaternion q = q1*q2;
-
 	tf::quaternionTFToMsg(q, target_pose.orientation);
-	group.setPoseTarget(target_pose,"link_5");
+}
 
-	bool success = group.plan(my_plan);
+void grip_cb(const std_msgs::Empty& msg){
+	geometry_msgs::Pose p = target_pose;
 
-	if(success){
-		ROS_INFO("Random Pose Goal SUCCESS");
-		group.move();
-		return;
-	}else{
-		if(j_group_ptr != NULL){
-			const moveit::core::JointModelGroup& j_group = *j_group_ptr;
-			const kinematics::KinematicsBaseConstPtr& solver_ptr = j_group.getSolverInstance();
-
-			std::vector<geometry_msgs::Pose> target_pose_v;
-			target_pose_v.push_back(target_pose);
-
-			d_vec seed_pose;
-			group.getCurrentState()->copyJointGroupPositions(group.getCurrentState()->getRobotModel()->getJointModelGroup(group.getName()), seed_pose);
-			std::vector<d_vec> solutions;
-
-			kinematics::KinematicsResult result;
-			kinematics::KinematicsQueryOptions options;
-
-			options.return_approximate_solution = true;
-			options.discretization_method = kinematics::DiscretizationMethods::NO_DISCRETIZATION; // TODO : play with this
-
-			if(solver_ptr->getPositionIK(target_pose_v,seed_pose,solutions,result,options)){
-				ROS_INFO("ALTERNATIVE IK SOLUTION CANDIDATES FOUND! ");
-				std::cout << std::setprecision(4);
-
-				std::vector<std::string> link_names;
-				link_names.push_back(group.getEndEffectorLink());
-
-				std::vector<geometry_msgs::Pose> dst_pose_v;
-
-				for(std::vector<d_vec>::const_iterator it = solutions.begin(); it != solutions.end(); ++it){
-					const d_vec& sol = (*it);
-					float pitch = fabs(sol[1] + sol[2] + sol[3]);
-
-					if(fabs(fabs(pitch) - M_PI) > 1e-1){
-						// Sometimes it searches for things pointing upwards, which doesn't work.
-						// Therefore, we're looking for an ik solution pointing DOWNWARDS!
-						continue;
-					}
-
-					//solver_ptr->getPositionFK(link_names,sol,dst_pose_v);
-					//std::cout << dst_pose_v.front() << std::endl;
-
-					group.setJointValueTarget(sol);
-					success = group.plan(my_plan);
-					if(success){
-						//std::cout << sol[1] << ',' << sol[2] << ',' << sol[3] << std::endl;
-						ROS_INFO("Random Pose Goal SUCCESS");
-						group.move();
-						return;
-					}
-				}
-			}
-		}
-
+	// approach object from above
+	p.position.z += 0.2;
+	bool s1, s2;
+	s1 = moveToPose(p);
+	if(s1){
+		p.position.z -= 0.2;
+		s2 = moveToPose(p);
 	}
 
-	ROS_INFO("Random Pose Goal FAIL");
+	ROS_INFO("Grip : %s / %s", (s1?"SUCCESS":"FAIL"), (s2?"SUCCESS":"FAIL"));
 }
 
 void joint_cb(const std_msgs::Float64MultiArrayConstPtr& msg){
@@ -258,6 +286,7 @@ int main(int argc, char **argv)
 	ros::NodeHandle nh;  
 	ros::Subscriber sub = nh.subscribe("obj_point", 1, obj_cb);
 	ros::Subscriber sub_j = nh.subscribe("joint_positions", 1, joint_cb);
+	ros::Subscriber sub_g = nh.subscribe("grip", 1, grip_cb);
 
 	marker_pub = nh.advertise<visualization_msgs::Marker>("obj_marker", 10, true);
 
@@ -353,7 +382,7 @@ int main(int argc, char **argv)
 	//  sleep(5.0);
 	//}
 
-//#define GO_HOME
+	//#define GO_HOME
 #ifdef GO_HOME
 	std::vector<double> group_variable_values;
 	group.getCurrentState()->copyJointGroupPositions(group.getCurrentState()->getRobotModel()->getJointModelGroup(group.getName()), group_variable_values);
