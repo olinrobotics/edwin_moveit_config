@@ -7,6 +7,7 @@ Panels:
         - /MotionPlanning1/Planning Request1
         - /MotionPlanning1/Planning Metrics1
         - /MotionPlanning1/Planned Path1
+        - /Axes1
       Splitter Ratio: 0.74256
     Tree Height: 332
   - Class: rviz/Help
@@ -187,16 +188,48 @@ Visualization Manager:
       Enabled: true
       Length: 1
       Name: Axes
-      Radius: 0.1
+      Radius: 0.01
       Reference Frame: <Fixed Frame>
       Value: true
-    - Class: rviz/Marker
+    - Alpha: 1
+      Autocompute Intensity Bounds: true
+      Autocompute Value Bounds:
+        Max Value: 10
+        Min Value: -10
+        Value: true
+      Axis: Z
+      Channel Name: intensity
+      Class: rviz/PointCloud2
+      Color: 255; 255; 255
+      Color Transformer: RGB8
+      Decay Time: 0
       Enabled: true
-      Marker Topic: /obj_marker
-      Name: Marker
-      Namespaces:
-        "": true
-      Queue Size: 100
+      Invert Rainbow: false
+      Max Color: 255; 255; 255
+      Max Intensity: 4096
+      Min Color: 0; 0; 0
+      Min Intensity: 0
+      Name: PointCloud2
+      Position Transformer: XYZ
+      Queue Size: 10
+      Selectable: true
+      Size (Pixels): 3
+      Size (m): 0.01
+      Style: Flat Squares
+      Topic: /pcl
+      Unreliable: false
+      Use Fixed Frame: true
+      Use rainbow: true
+      Value: true
+    - Alpha: 1
+      Class: rviz/PointStamped
+      Color: 204; 41; 204
+      Enabled: true
+      History Length: 1
+      Name: PointStamped
+      Radius: 0.2
+      Topic: /obj_point
+      Unreliable: false
       Value: true
   Enabled: true
   Global Options:
@@ -225,10 +258,10 @@ Visualization Manager:
         Z: 2.23518e-07
       Name: Current View
       Near Clip Distance: 0.01
-      Pitch: 0.334797
+      Pitch: 0.224797
       Target Frame: base_link
       Value: XYOrbit (rviz)
-      Yaw: 4.66176
+      Yaw: 5.22676
     Saved: ~
 Window Geometry:
   Displays:

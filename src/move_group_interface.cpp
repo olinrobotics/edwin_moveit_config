@@ -164,8 +164,8 @@ class EdwinMoveGroupInterface{
 	public:
 		EdwinMoveGroupInterface(ros::NodeHandle& nh);
 		void obj_cb(const geometry_msgs::PointStampedConstPtr& msg);
-		void grip_cb(const std_msgs::EmptyConstPtr& msg);
-		void joint_cb(const std_msgs::Float64MultiArrayConstPtr& msg);
+		void move_cb(const std_msgs::EmptyConstPtr& msg);
+		void joint_cb(const sensor_msgs::JointStateConstPtr& msg);
 
 		bool moveToPose(const geometry_msgs::Pose& target_pose);
 };
@@ -224,9 +224,10 @@ bool EdwinMoveGroupInterface::moveToPose(const geometry_msgs::Pose& target_pose)
 	return false;
 }
 
-void EdwinMoveGroupInterface::joint_cb(const std_msgs::Float64MultiArrayConstPtr& msg){
+void EdwinMoveGroupInterface::joint_cb(const sensor_msgs::JointStateConstPtr& msg){
+	const std::vector<double>& p = msg->position;
 	group.setStartStateToCurrentState();
-	group.setJointValueTarget(msg->data);
+	group.setJointValueTarget(p);
 	moveit::planning_interface::MoveGroup::Plan my_plan;
 	bool success = group.plan(my_plan);
 	ROS_INFO("Joint Request :  %s",success?"SUCCESS":"FAILED");
@@ -243,13 +244,13 @@ EdwinMoveGroupInterface::EdwinMoveGroupInterface(ros::NodeHandle& nh):
 {
 	// **** ROS SUB/PUB *** //
 	sub = nh.subscribe("obj_point", 1, &EdwinMoveGroupInterface::obj_cb, this);
-	j_sub = nh.subscribe("joint_positions", 1, &EdwinMoveGroupInterface::joint_cb, this);
-	g_sub = nh.subscribe("grip", 1, &EdwinMoveGroupInterface::grip_cb, this);
+	j_sub = nh.subscribe("joint_cmd", 1, &EdwinMoveGroupInterface::joint_cb, this);
+	g_sub = nh.subscribe("move", 1, &EdwinMoveGroupInterface::move_cb, this);
 	marker_pub = nh.advertise<visualization_msgs::Marker>("obj_marker", 10, true);
 
 	// **** CONFIGURE GROUP **** //
 	group.setNumPlanningAttempts(8); // attempt three times
-	group.setGoalPositionTolerance(0.03); // 3cm tolerance
+	group.setGoalPositionTolerance(0.01); // 1cm tolerance
 	group.setGoalOrientationTolerance(0.034); // 2 deg. tolerance
 	group.setGoalJointTolerance(0.034);
 
@@ -288,7 +289,7 @@ void EdwinMoveGroupInterface::obj_cb(const geometry_msgs::PointStampedConstPtr& 
 	for(int i=0; i < n; ++i){
 		try{
 			//ROS_INFO("Frame ID : %s", msg->header.frame_id.c_str());
-			tf_listener.waitForTransform("base_link", msg->header.frame_id, ros::Time::now(), ros::Duration(1.0));
+			tf_listener.waitForTransform("base_link", msg->header.frame_id, msg->header.stamp, ros::Duration(1.0));
 			tf_listener.transformPoint("base_link", *msg, target_point);
 			//tf_listener.transformPoint("base_link", ros::Time(0), *msg, "odom", target_point);
 			marker_msg.pose.position = target_point.point;
@@ -302,7 +303,7 @@ void EdwinMoveGroupInterface::obj_cb(const geometry_msgs::PointStampedConstPtr& 
 
 			target_pose.position = target_point.point;
 			target_pose.position.x += 0.036; // adjust x so that the gripper would be aligned with the object
-			target_pose.position.z += 0.16;  // raise a little bit to have the end of the jaw set at the object
+			target_pose.position.z += 0.2;  // raise a little bit to have the end of the jaw set at the object
 
 			tf::Quaternion q1 = tf::Quaternion(tf::Vector3(0,1,0),M_PI/2);
 			tf::Quaternion q2 = tf::Quaternion(tf::Vector3(0,0,1),0);
@@ -324,7 +325,7 @@ void EdwinMoveGroupInterface::obj_cb(const geometry_msgs::PointStampedConstPtr& 
 	}
 }
 
-void EdwinMoveGroupInterface::grip_cb(const std_msgs::EmptyConstPtr&){
+void EdwinMoveGroupInterface::move_cb(const std_msgs::EmptyConstPtr&){
 	geometry_msgs::Pose p = target_pose;
 
 	// approach object from above
